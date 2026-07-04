@@ -1,0 +1,9 @@
+{
+  "name": "thunderdocs-aipdf",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ThunderDocs — AI document/PDF generator, powered by Groq. Deployed at aipdf.wondermayank.indevs.in",
+  "engines": {
+    "node": "20.x"
+  }
+}
