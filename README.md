@@ -47,8 +47,8 @@ small "Demo content" badge on results in this mode.
 
 ### 1. Get a Groq key
 Free at https://console.groq.com → API Keys → Create key. `api/generate.js`
-is already wired to Groq's `openai/gpt-oss-120b` model (their current
-recommended model — Groq retired `llama-3.3-70b-versatile` in June 2026).
+is wired to Groq's newest model, `qwen/qwen3.8-27b` (Preview tier), and falls
+back automatically to the production model `openai/gpt-oss-120b` if it fails.
 
 ### 2. Push this folder to GitHub
 ```
@@ -101,16 +101,19 @@ update `callAPIStreaming()` in `assets/app.js` to match.
 
 ### A note on the model
 
-`openai/gpt-oss-120b` is a reasoning model, which behaves slightly differently
-from the plain chat model this was originally built against:
-- `include_reasoning: false` and `reasoning_effort: 'low'` are set in
-  `api/generate.js` to keep its internal reasoning out of the response and
-  keep it fast/cheap for this kind of short structured-output task.
+`qwen/qwen3.8-27b` is Groq's newest model. It has a thinking mode and an
+instruct mode; `api/generate.js` uses instruct mode (`reasoning_effort: 'none'`)
+because this tool only needs short structured JSON, so it's fast and cheap
+with no reasoning tokens to filter out.
+- It's a **Preview** model, which Groq may retire at short notice. That's why
+  the `MODELS` list in `api/generate.js` falls back to the production model
+  `openai/gpt-oss-120b` (a reasoning model, run with `reasoning_effort: 'low'`
+  and `include_reasoning: false`) whenever the first call fails.
 - The frontend extracts the outermost `{...}` block from the response before
   parsing (`extractJson()` in `assets/app.js`), in case any stray text slips
   in around the JSON.
-- Groq updates its model lineup fairly often — if this model is ever retired
-  too, check https://console.groq.com/docs/models and swap the `model` field.
+- To change models, edit the `MODELS` array. Check
+  https://console.groq.com/docs/models for the current lineup.
 
 ### Streaming
 

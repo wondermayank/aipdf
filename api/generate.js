@@ -1,6 +1,7 @@
 // api/generate.js
 // Vercel serverless function — proxies document-generation requests to Groq
-// (openai/gpt-oss-120b) so the browser never sees your API key.
+// (qwen/qwen3.8-27b, with openai/gpt-oss-120b as automatic fallback) so the
+// browser never sees your API key.
 //
 // Streams the model's raw text back to the browser as it's generated (see
 // "Streaming" note below), so the frontend can show live progress instead of
@@ -12,11 +13,12 @@
 //        GROQ_API_KEY = <your key>
 //   3. Deploy. The frontend automatically calls this endpoint at /api/generate.
 //
-// Model note: Groq deprecated llama-3.3-70b-versatile in June 2026. This uses
-// their current recommended replacement, openai/gpt-oss-120b, a reasoning
-// model — include_reasoning:false and reasoning_effort:'low' keep it fast and
-// keep the internal reasoning out of the response you need to parse as JSON.
-// Check https://console.groq.com/docs/models if this model is ever retired.
+// Model note: Groq's newest model is qwen/qwen3.8-27b (Preview tier). It runs in instruct mode here
+// (reasoning_effort:'none') — no thinking tokens, fastest and cheapest for
+// short structured-JSON output. Because Preview models can be retired at
+// short notice, the function automatically falls back to the production
+// model openai/gpt-oss-120b if the primary call fails. To change either,
+// edit the MODELS list below. Current list: https://console.groq.com/docs/models
 //
 // Streaming: Vercel's Node.js runtime supports progressive res.write() calls
 // (see https://vercel.com/docs/functions/streaming-functions). This function
@@ -61,35 +63,50 @@ module.exports = async function handler(req, res) {
 
   const instruction = schemaInstructions[format] || schemaInstructions.word;
 
+  // Tried in order; the first one that answers with a stream wins.
+  const MODELS = [
+    {
+      // Newest Groq model (Preview). Instruct mode = no reasoning tokens.
+      model: 'qwen/qwen3.8-27b',
+      params: { temperature: 0.7, top_p: 0.8, reasoning_effort: 'none' }
+    },
+    {
+      // Production fallback. Reasoning model — keep effort low and hide it.
+      model: 'openai/gpt-oss-120b',
+      params: { temperature: 0.6, reasoning_effort: 'low', include_reasoning: false }
+    }
+  ];
+
+  const messages = [
+    { role: 'system', content: `You generate structured content for a document-generation tool. ${instruction}` },
+    { role: 'user', content: prompt }
+  ];
+
   let groqRes;
-  try {
-    groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: 'openai/gpt-oss-120b',
-        temperature: 0.6,
-        max_tokens: 2000,
-        reasoning_effort: 'low',
-        include_reasoning: false,
-        stream: true,
-        messages: [
-          { role: 'system', content: `You generate structured content for a document-generation tool. ${instruction}` },
-          { role: 'user', content: prompt }
-        ]
-      })
-    });
-  } catch (err) {
-    res.status(502).json({ error: 'Could not reach Groq', detail: String(err) });
-    return;
+  let lastError = '';
+  for (const { model, params } of MODELS) {
+    try {
+      groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({ model, max_tokens: 2000, stream: true, messages, ...params })
+      });
+    } catch (err) {
+      lastError = String(err);
+      groqRes = null;
+      continue;
+    }
+    if (groqRes.ok && groqRes.body) break;
+    lastError = `${model}: ${await groqRes.text().catch(() => '')}`;
+    console.error('Groq model failed, trying next:', lastError);
+    groqRes = null;
   }
 
-  if (!groqRes.ok || !groqRes.body) {
-    const errText = await groqRes.text().catch(() => '');
-    res.status(502).json({ error: 'Upstream generation failed', detail: errText });
+  if (!groqRes) {
+    res.status(502).json({ error: 'Upstream generation failed', detail: lastError });
     return;
   }
 
