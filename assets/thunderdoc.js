@@ -1,5 +1,5 @@
-// AI endpoint: Cloudflare Pages Function at functions/tools/aipdf/api/generate.js (uses the GROQ_API_KEY secret)
-var THUNDERDOC_API='/tools/aipdf/api/generate';
+// AI endpoint: Vercel Serverless Function at api/generate.js (uses the GROQ_API_KEY environment variable)
+var THUNDERDOC_API='/api/generate';
 (function(){
 var $=function(s,r){return(r||document).querySelector(s)},$$=function(s,r){return[].slice.call((r||document).querySelectorAll(s))};
 var ld=$('#loader');function hl(){ld&&ld.classList.add('hide')}addEventListener('DOMContentLoaded',function(){setTimeout(hl,200)});setTimeout(hl,1500);
