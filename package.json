@@ -4,6 +4,6 @@
   "private": true,
   "description": "ThunderDocs — AI document/PDF generator, powered by Groq. Deployed at aipdf.wondermayank.indevs.in",
   "engines": {
-    "node": "20.x"
+    "node": "24.x"
   }
 }
